@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 mod nix;
 
+use anyhow::Context;
 use clap::Parser;
 use junit_report::{Duration, ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
 use tracing::debug;
@@ -152,26 +153,9 @@ async fn run_checks(output_path: &Path) -> anyhow::Result<()> {
     let mut out: Vec<u8> = vec![];
     report.write_xml(&mut out).unwrap();
 
-    tokio::fs::write(output_path, out).await?;
-
-    //  {
-    //   "checks": {
-    //     "x86_64-linux": {
-    //       "nix_checks_junit": {
-    //         "name": "nix_checks_junit-0.1.0",
-    //         "type": "derivation"
-    //       },
-    //       "nix_checks_junit-clippy": {
-    //         "name": "nix_checks_junit-clippy-0.1.0",
-    //         "type": "derivation"
-    //       },
-    //       "nix_checks_junit-fmt": {
-    //         "name": "nix_checks_junit-fmt-0.1.0",
-    //         "type": "derivation"
-    //       }
-    //     }
-    //   },
-    // }
+    tokio::fs::write(output_path, out)
+        .await
+        .with_context(|| format!("Could not open path at '{}'", output_path.display()))?;
 
     Ok(())
 }
