@@ -64,10 +64,14 @@ struct Derivation {
     kind: monostate::MustBe!("derivation"),
 }
 
+enum CheckResult {
+    Success,
+    Failure { log_output: String },
+}
+
 struct CheckTestCase {
     name: String,
-    success: bool,
-    log_output: String,
+    result: CheckResult,
 }
 
 async fn run_checks(output_path: &Path) -> anyhow::Result<()> {
@@ -106,28 +110,36 @@ async fn run_checks(output_path: &Path) -> anyhow::Result<()> {
         .await
         .is_ok();
 
-        let log_output = crate::nix::log(&info[0].drv_path).await?;
-
         check_infos.push(CheckTestCase {
             name: derivation.name,
-            success: build_status,
-            log_output,
+            result: {
+                if build_status {
+                    CheckResult::Success
+                } else {
+                    CheckResult::Failure {
+                        log_output: crate::nix::log(&info[0].drv_path).await?,
+                    }
+                }
+            },
         })
     }
 
     let test_cases: Vec<TestCase> = check_infos
         .into_iter()
-        .map(|c| {
-            let mut tc = if c.success {
+        .map(|c| match c.result {
+            CheckResult::Success => {
                 debug!(name = %c.name, "Creating success case");
                 TestCaseBuilder::success(&c.name, Duration::ZERO).build()
-            } else {
+            }
+            CheckResult::Failure { log_output } => {
                 debug!(name = %c.name, "Creating failure case");
-                TestCaseBuilder::failure(&c.name, Duration::ZERO, "nix check", "build failed")
-                    .build()
-            };
-            tc.set_system_out(&c.log_output);
-            tc
+                let mut tc =
+                    TestCaseBuilder::failure(&c.name, Duration::ZERO, "nix check", "build failed")
+                        .build();
+
+                tc.set_system_out(&log_output);
+                tc
+            }
         })
         .collect();
 
