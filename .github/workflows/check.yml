@@ -1,4 +1,4 @@
-name: "Check CloudMQTT"
+name: "Check nix_checks_junit"
 
 on:
   push:
