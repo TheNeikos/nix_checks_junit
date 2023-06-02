@@ -1,0 +1,11 @@
+# direnv
+.direnv
+result
+
+# Rust
+target
+
+
+# Added by cargo
+
+/target
