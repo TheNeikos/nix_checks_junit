@@ -59,6 +59,9 @@
           };
         };
 
+        packages.nix_checks_junit = nix_checks_junit;
+        packages.default = nix_checks_junit;
+
         devShells.default = devShells.nix_checks_junit;
         devShells.nix_checks_junit = pkgs.mkShell {
           buildInputs = [ ];

@@ -24,4 +24,27 @@ jobs:
       - name: Install gitlint
         run: pip install gitlint
       - run: gitlint --commits $(git merge-base origin/main HEAD)..
+  check-reporter:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - uses: actions/checkout@v2     # checkout the repo
+      - uses: cachix/install-nix-action@v20
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - uses: cachix/cachix-action@v12
+        with:
+          name: nix-checks-junit
+            # If you chose API tokens for write access OR if you have a private cache
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - run: nix --extra-experimental-features "nix-command flakes" run . -- run-checks --output-path ./checks.xml
 
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()    # run this step even if previous step failed
+        with:
+          name: nix Tests            # Name of the check run which will be created
+          path: checks.xml            # Path to test results
+          reporter: java-junit        # Format of test results
