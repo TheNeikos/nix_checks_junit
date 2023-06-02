@@ -123,8 +123,7 @@ async fn run_checks(output_path: &Path) -> anyhow::Result<()> {
                 TestCaseBuilder::success(&c.name, Duration::ZERO).build()
             } else {
                 debug!(name = %c.name, "Creating failure case");
-                TestCaseBuilder::failure(&c.name, Duration::ZERO, 
-                                         "nix check", "build failed")
+                TestCaseBuilder::failure(&c.name, Duration::ZERO, "nix check", "build failed")
                     .build()
             };
             tc.set_system_out(&c.log_output);
