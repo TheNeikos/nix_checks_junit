@@ -37,7 +37,7 @@ jobs:
           name: nix-checks-junit
             # If you chose API tokens for write access OR if you have a private cache
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - run: nix --extra-experimental-features "nix-command flakes" run -- run-checks --output-path ./checks.xml
+      - run: nix --extra-experimental-features "nix-command flakes" run . -- run-checks --output-path ./checks.xml
 
       - name: Test Report
         uses: dorny/test-reporter@v1
