@@ -27,6 +27,8 @@ jobs:
   check-reporter:
     name: Build & Test
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
     steps:
       - uses: actions/checkout@v2     # checkout the repo
       - uses: cachix/install-nix-action@v20
