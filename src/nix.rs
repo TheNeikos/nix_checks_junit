@@ -93,7 +93,7 @@ pub(crate) async fn build(
     Ok(serde_json::from_slice(&cmd.stdout)?)
 }
 
-#[tracing::instrument(level = "debug", err)]
+#[tracing::instrument(level = "debug")]
 pub(crate) async fn log(drv_path: &Utf8Path) -> anyhow::Result<String> {
     let cmd = tokio::process::Command::new("nix")
         .args(["log", drv_path.as_str()])
@@ -105,7 +105,7 @@ pub(crate) async fn log(drv_path: &Utf8Path) -> anyhow::Result<String> {
 
     if !cmd.status.success() {
         return Err(anyhow::anyhow!(
-            "`nix log {drv_path:?}` did not run succesfully.\nStdout:{}\nStderr:{}",
+            "`nix log {drv_path}` did not run succesfully.\nStdout:{}\nStderr:{}",
             String::from_utf8_lossy(&cmd.stdout),
             String::from_utf8_lossy(&cmd.stderr)
         ));
