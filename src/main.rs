@@ -1,9 +1,9 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 
 mod nix;
 
 use anyhow::Context;
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use junit_report::{Duration, ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
 use tracing::debug;
@@ -26,7 +26,7 @@ enum Command {
     RunChecks {
         /// The path where the output should be written to
         #[clap(short, long, value_enum)]
-        output_path: PathBuf,
+        output_path: Utf8PathBuf,
     },
 }
 
@@ -75,7 +75,7 @@ struct CheckTestCase {
     result: CheckResult,
 }
 
-async fn run_checks(output_path: &Path) -> anyhow::Result<()> {
+async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
     let checks_structure = crate::nix::show().await?;
     debug!(?checks_structure, "Got checks structure");
 
@@ -155,7 +155,7 @@ async fn run_checks(output_path: &Path) -> anyhow::Result<()> {
 
     tokio::fs::write(output_path, out)
         .await
-        .with_context(|| format!("Could not open path at '{}'", output_path.display()))?;
+        .with_context(|| format!("Could not open path at '{}'", output_path))?;
 
     Ok(())
 }

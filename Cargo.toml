@@ -8,6 +8,7 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1.0.71"
+camino = { version = "1.1.6", features = ["serde1"] }
 clap = { version = "4.3.0", features = ["derive", "cargo"] }
 junit-report = "0.8.2"
 monostate = "0.1.6"

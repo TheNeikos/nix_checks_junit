@@ -1,8 +1,6 @@
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    process::Stdio,
-};
+use std::{collections::HashMap, process::Stdio};
+
+use camino::{Utf8Path, Utf8PathBuf};
 
 #[tracing::instrument(level = "debug", err)]
 pub async fn show() -> anyhow::Result<serde_json::Value> {
@@ -55,9 +53,9 @@ pub(crate) async fn current_system() -> anyhow::Result<String> {
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct BuildDerivation {
     #[serde(rename = "drvPath")]
-    pub(crate) drv_path: PathBuf,
+    pub(crate) drv_path: Utf8PathBuf,
     #[allow(dead_code)]
-    outputs: HashMap<String, PathBuf>,
+    outputs: HashMap<String, Utf8PathBuf>,
 }
 
 #[derive(Debug)]
@@ -66,7 +64,7 @@ pub enum BuildMode {
     Real,
 }
 
-#[tracing::instrument(level = "debug", ret, err)]
+#[tracing::instrument(level = "debug")]
 pub(crate) async fn build(
     build_target: String,
     build_mode: BuildMode,
@@ -96,9 +94,9 @@ pub(crate) async fn build(
 }
 
 #[tracing::instrument(level = "debug", err)]
-pub(crate) async fn log(drv_path: &Path) -> anyhow::Result<String> {
+pub(crate) async fn log(drv_path: &Utf8Path) -> anyhow::Result<String> {
     let cmd = tokio::process::Command::new("nix")
-        .args(["log", &drv_path.to_string_lossy()])
+        .args(["log", drv_path.as_str()])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
