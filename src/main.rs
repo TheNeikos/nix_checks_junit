@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 mod nix;
 
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
-use junit_report::{Duration, ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
+use junit_report::{ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
 use tracing::debug;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -73,6 +74,7 @@ enum CheckResult {
 struct CheckTestCase {
     name: String,
     result: CheckResult,
+    duration: Duration,
 }
 
 async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
@@ -104,12 +106,14 @@ async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
             nix::BuildMode::DryRun,
         )
         .await?;
+        let start = Instant::now();
         let build_status = crate::nix::build(
             format!(".#checks.{current_system}.{check_name}"),
             nix::BuildMode::Real,
         )
         .await
         .is_ok();
+        let duration = start.elapsed();
 
         check_infos.push(CheckTestCase {
             name: derivation.name,
@@ -122,6 +126,7 @@ async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
                     }
                 }
             },
+            duration,
         })
     }
 
@@ -130,13 +135,21 @@ async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
         .map(|c| match c.result {
             CheckResult::Success => {
                 debug!(name = %c.name, "Creating success case");
-                TestCaseBuilder::success(&c.name, Duration::ZERO).build()
+                TestCaseBuilder::success(
+                    &c.name,
+                    junit_report::Duration::milliseconds(c.duration.as_millis() as i64),
+                )
+                .build()
             }
             CheckResult::Failure { log_output } => {
                 debug!(name = %c.name, "Creating failure case");
-                let mut tc =
-                    TestCaseBuilder::failure(&c.name, Duration::ZERO, "nix check", "build failed")
-                        .build();
+                let mut tc = TestCaseBuilder::failure(
+                    &c.name,
+                    junit_report::Duration::milliseconds(c.duration.as_millis() as i64),
+                    "nix check",
+                    "build failed",
+                )
+                .build();
 
                 tc.set_system_out(&log_output);
                 tc
