@@ -4,8 +4,10 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 #[tracing::instrument(level = "debug", err)]
 pub async fn show() -> anyhow::Result<serde_json::Value> {
+    let args = ["flake", "show", "--json"];
+    tracing::trace!(?args, "Calling nix command");
     let cmd = tokio::process::Command::new("nix")
-        .args(["flake", "show", "--json"])
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -25,14 +27,17 @@ pub async fn show() -> anyhow::Result<serde_json::Value> {
 
 #[tracing::instrument(level = "debug", err)]
 pub(crate) async fn current_system() -> anyhow::Result<String> {
+    let args = [
+        "eval",
+        "--impure",
+        "--raw",
+        "--expr",
+        "builtins.currentSystem",
+    ];
+
+    tracing::trace!(?args, "Calling nix command");
     let cmd = tokio::process::Command::new("nix")
-        .args([
-            "eval",
-            "--impure",
-            "--raw",
-            "--expr",
-            "builtins.currentSystem",
-        ])
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -74,6 +79,7 @@ pub(crate) async fn build(
         BuildMode::DryRun => vec!["build", &build_target, "--dry-run", "--json"],
     };
 
+    tracing::trace!(?args, "Calling nix command");
     let cmd = tokio::process::Command::new("nix")
         .args(args)
         .stdin(Stdio::null())
@@ -95,8 +101,10 @@ pub(crate) async fn build(
 
 #[tracing::instrument(level = "debug")]
 pub(crate) async fn log(drv_path: &Utf8Path) -> anyhow::Result<String> {
+    let args = ["log", drv_path.as_str()];
+    tracing::trace!(?args, "Calling nix command");
     let cmd = tokio::process::Command::new("nix")
-        .args(["log", drv_path.as_str()])
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
