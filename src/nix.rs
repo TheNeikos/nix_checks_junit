@@ -13,11 +13,11 @@ pub async fn show() -> anyhow::Result<serde_json::Value> {
         .await?;
 
     if !cmd.status.success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "`nix flake show --json` did not run succesfully.\nStdout:{}\nStderr:{}",
             String::from_utf8_lossy(&cmd.stdout),
             String::from_utf8_lossy(&cmd.stderr)
-        ));
+        )
     }
 
     Ok(serde_json::from_slice(&cmd.stdout)?)
@@ -40,11 +40,11 @@ pub(crate) async fn current_system() -> anyhow::Result<String> {
         .await?;
 
     if !cmd.status.success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "`nix eval --impure --raw --expr 'builtins.currentSystem'` did not run succesfully.\nStdout:{}\nStderr:{}",
             String::from_utf8_lossy(&cmd.stdout),
             String::from_utf8_lossy(&cmd.stderr)
-        ));
+        )
     }
 
     Ok(String::from_utf8(cmd.stdout)?)
@@ -83,11 +83,11 @@ pub(crate) async fn build(
         .await?;
 
     if !cmd.status.success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "`nix build {build_target} --json` did not run succesfully.\nStdout:{}\nStderr:{}",
             String::from_utf8_lossy(&cmd.stdout),
             String::from_utf8_lossy(&cmd.stderr)
-        ));
+        )
     }
 
     Ok(serde_json::from_slice(&cmd.stdout)?)
@@ -104,11 +104,11 @@ pub(crate) async fn log(drv_path: &Utf8Path) -> anyhow::Result<String> {
         .await?;
 
     if !cmd.status.success() {
-        return Err(anyhow::anyhow!(
+        anyhow::bail!(
             "`nix log {drv_path}` did not run succesfully.\nStdout:{}\nStderr:{}",
             String::from_utf8_lossy(&cmd.stdout),
             String::from_utf8_lossy(&cmd.stderr)
-        ));
+        )
     }
 
     Ok(String::from_utf8(cmd.stdout)?)
