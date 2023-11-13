@@ -7,7 +7,7 @@ use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use junit_report::{ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
-use tracing::debug;
+use tracing::{debug, error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -33,7 +33,9 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let filter = tracing_subscriber::filter::EnvFilter::from_default_env();
+    let filter = tracing_subscriber::filter::EnvFilter::builder()
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_timer(tracing_subscriber::fmt::time::uptime())
         .with_level(true)
@@ -98,29 +100,35 @@ async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
         })
         .collect::<Result<_, _>>()?;
 
+    info!(
+        "Checking the following attributes: {}",
+        relevant_checks
+            .keys()
+            .map(|k| k.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
     let mut check_infos: Vec<CheckTestCase> = vec![];
 
     for (check_name, derivation) in relevant_checks {
-        let info = crate::nix::build(
-            format!(".#checks.{current_system}.{check_name}"),
-            nix::BuildMode::DryRun,
-        )
-        .await?;
+        let nix_check_string = format!(".#checks.{current_system}.{check_name}");
+        let info = crate::nix::build(nix_check_string.clone(), nix::BuildMode::DryRun).await?;
+        info!("Running {:?} -> {}", nix_check_string, info[0].drv_path);
         let start = Instant::now();
-        let build_status = crate::nix::build(
-            format!(".#checks.{current_system}.{check_name}"),
-            nix::BuildMode::Real,
-        )
-        .await
-        .is_ok();
+        let build_status = crate::nix::build(nix_check_string, nix::BuildMode::Real)
+            .await
+            .is_ok();
         let duration = start.elapsed();
 
         check_infos.push(CheckTestCase {
             name: derivation.name,
             result: {
                 if build_status {
+                    info!("{check_name} ran succesfully");
                     CheckResult::Success
                 } else {
+                    error!("{check_name} failed");
                     CheckResult::Failure {
                         log_output: crate::nix::log(&info[0].drv_path).await?,
                     }
