@@ -130,7 +130,15 @@ async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
                 } else {
                     error!("{check_name} failed");
                     CheckResult::Failure {
-                        log_output: crate::nix::log(&info[0].drv_path).await?,
+                        log_output: {
+                            match crate::nix::log(&info[0].drv_path).await {
+                                Ok(out) => out,
+                                Err(error) => {
+                                    tracing::warn!(?error, "nix-log failed");
+                                    format!("nix-log call failed: {error}")
+                                }
+                            }
+                        },
                     }
                 }
             },
