@@ -1,4 +1,4 @@
-use std::{collections::HashMap, process::Stdio};
+use std::{collections::HashMap, num::NonZeroUsize, process::Stdio};
 
 use camino::{Utf8Path, Utf8PathBuf};
 
@@ -68,11 +68,19 @@ pub enum BuildMode {
 pub(crate) async fn build(
     build_target: String,
     build_mode: BuildMode,
+    max_jobs: Option<NonZeroUsize>,
 ) -> anyhow::Result<Vec<BuildDerivation>> {
-    let args = match build_mode {
-        BuildMode::Real => vec!["build", &build_target, "--json"],
-        BuildMode::DryRun => vec!["build", &build_target, "--dry-run", "--json"],
-    };
+    let args = max_jobs
+        .map(|mj| vec!["--max-jobs".to_string(), mj.to_string()])
+        .unwrap_or_default()
+        .into_iter()
+        .chain({
+            match build_mode {
+                BuildMode::Real => vec!["build", &build_target, "--json"].into_iter().map(String::from),
+                BuildMode::DryRun => vec!["build", &build_target, "--dry-run", "--json"].into_iter().map(String::from),
+            }
+        })
+        .collect::<Vec<String>>();
 
     let cmd = tokio::process::Command::new("nix")
         .args(args)
