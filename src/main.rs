@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
 mod nix;
@@ -28,6 +29,10 @@ enum Command {
         /// The path where the output should be written to
         #[clap(short, long, value_enum)]
         output_path: Utf8PathBuf,
+
+        /// The number of --max-jobs to pass to nix
+        #[clap(long)]
+        max_jobs: Option<NonZeroUsize>,
     },
 }
 
@@ -52,8 +57,11 @@ async fn main() -> anyhow::Result<()> {
     debug!(?args, "Running app with args");
 
     match args.command {
-        Command::RunChecks { output_path } => {
-            run_checks(&output_path).await?;
+        Command::RunChecks {
+            output_path,
+            max_jobs,
+        } => {
+            run_checks(&output_path, max_jobs).await?;
         }
     }
 
@@ -79,7 +87,7 @@ struct CheckTestCase {
     duration: Duration,
 }
 
-async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
+async fn run_checks(output_path: &Utf8Path, max_jobs: Option<NonZeroUsize>) -> anyhow::Result<()> {
     let checks_structure = crate::nix::show().await?;
     debug!(?checks_structure, "Got checks structure");
 
@@ -113,10 +121,11 @@ async fn run_checks(output_path: &Utf8Path) -> anyhow::Result<()> {
 
     for (check_name, derivation) in relevant_checks {
         let nix_check_string = format!(".#checks.{current_system}.{check_name}");
-        let info = crate::nix::build(nix_check_string.clone(), nix::BuildMode::DryRun).await?;
+        let info =
+            crate::nix::build(nix_check_string.clone(), nix::BuildMode::DryRun, max_jobs).await?;
         info!("Running {:?} -> {}", nix_check_string, info[0].drv_path);
         let start = Instant::now();
-        let build_status = crate::nix::build(nix_check_string, nix::BuildMode::Real)
+        let build_status = crate::nix::build(nix_check_string, nix::BuildMode::Real, max_jobs)
             .await
             .is_ok();
         let duration = start.elapsed();
