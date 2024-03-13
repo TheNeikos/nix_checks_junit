@@ -1,5 +1,6 @@
-use std::{collections::HashMap, num::NonZeroUsize, process::Stdio};
+use std::{collections::HashMap, process::Stdio};
 
+use crate::nix::BuildMode::DryRun;
 use camino::{Utf8Path, Utf8PathBuf};
 
 #[tracing::instrument(level = "debug", err)]
@@ -58,7 +59,7 @@ pub(crate) struct BuildDerivation {
     outputs: HashMap<String, Utf8PathBuf>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BuildMode {
     DryRun,
     Real,
@@ -68,19 +69,14 @@ pub enum BuildMode {
 pub(crate) async fn build(
     build_target: String,
     build_mode: BuildMode,
-    max_jobs: Option<NonZeroUsize>,
+    nix_options: &Vec<String>,
 ) -> anyhow::Result<Vec<BuildDerivation>> {
-    let args = max_jobs
-        .map(|mj| vec!["--max-jobs".to_string(), mj.to_string()])
-        .unwrap_or_default()
-        .into_iter()
-        .chain({
-            match build_mode {
-                BuildMode::Real => vec!["build", &build_target, "--json"].into_iter().map(String::from),
-                BuildMode::DryRun => vec!["build", &build_target, "--dry-run", "--json"].into_iter().map(String::from),
-            }
-        })
-        .collect::<Vec<String>>();
+    let mut args = vec!["build", build_target.as_str(), "--json"];
+    if build_mode == DryRun {
+        args.push("--dry-run");
+    }
+    nix_options.iter().for_each(|o| args.push(o.as_str()));
+    tracing::debug!("running nix {:?}", args);
 
     let cmd = tokio::process::Command::new("nix")
         .args(args)

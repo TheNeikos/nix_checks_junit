@@ -4,11 +4,11 @@ use std::time::{Duration, Instant};
 
 mod nix;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use junit_report::{ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -30,9 +30,13 @@ enum Command {
         #[clap(short, long, value_enum)]
         output_path: Utf8PathBuf,
 
-        /// The number of --max-jobs to pass to nix
+        /// The number of --max-jobs to pass to nix - DEPRECATED use NIX_OPTIONS instead
         #[clap(long)]
         max_jobs: Option<NonZeroUsize>,
+
+        /// Additional options to pass to the nix build command
+        #[clap(last = true)]
+        nix_options: Vec<String>,
     },
 }
 
@@ -60,8 +64,21 @@ async fn main() -> anyhow::Result<()> {
         Command::RunChecks {
             output_path,
             max_jobs,
+            mut nix_options,
         } => {
-            run_checks(&output_path, max_jobs).await?;
+            let forbidden_options = &["--json", "--dry-run"];
+            if nix_options
+                .iter()
+                .any(|o| forbidden_options.contains(&o.as_str()))
+            {
+                bail!("Nix options cannot contain any of {:?}", forbidden_options);
+            }
+            if let Some(m) = max_jobs {
+                nix_options.push("--max-jobs".into());
+                nix_options.push(m.to_string());
+                warn!("--max-jobs option is deprecated, place --max-jobs in nix options after --")
+            }
+            run_checks(&output_path, &nix_options).await?;
         }
     }
 
@@ -87,7 +104,7 @@ struct CheckTestCase {
     duration: Duration,
 }
 
-async fn run_checks(output_path: &Utf8Path, max_jobs: Option<NonZeroUsize>) -> anyhow::Result<()> {
+async fn run_checks(output_path: &Utf8Path, nix_options: &Vec<String>) -> anyhow::Result<()> {
     let checks_structure = crate::nix::show().await?;
     debug!(?checks_structure, "Got checks structure");
 
@@ -121,11 +138,15 @@ async fn run_checks(output_path: &Utf8Path, max_jobs: Option<NonZeroUsize>) -> a
 
     for (check_name, derivation) in relevant_checks {
         let nix_check_string = format!(".#checks.{current_system}.{check_name}");
-        let info =
-            crate::nix::build(nix_check_string.clone(), nix::BuildMode::DryRun, max_jobs).await?;
+        let info = crate::nix::build(
+            nix_check_string.clone(),
+            nix::BuildMode::DryRun,
+            nix_options,
+        )
+        .await?;
         info!("Running {:?} -> {}", nix_check_string, info[0].drv_path);
         let start = Instant::now();
-        let build_status = crate::nix::build(nix_check_string, nix::BuildMode::Real, max_jobs)
+        let build_status = crate::nix::build(nix_check_string, nix::BuildMode::Real, nix_options)
             .await
             .is_ok();
         let duration = start.elapsed();
