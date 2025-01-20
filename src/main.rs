@@ -7,6 +7,8 @@ mod nix;
 use anyhow::{bail, Context};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
+use futures::stream::FuturesUnordered;
+use futures::TryStreamExt;
 use junit_report::{ReportBuilder, TestCase, TestCaseBuilder, TestSuiteBuilder};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::layer::SubscriberExt;
@@ -134,47 +136,54 @@ async fn run_checks(output_path: &Utf8Path, nix_options: &Vec<String>) -> anyhow
             .join(", ")
     );
 
-    let mut check_infos: Vec<CheckTestCase> = vec![];
+    let check_infos = relevant_checks
+        .into_iter()
+        .map(|(check_name, derivation)| {
+            let current_system = current_system.clone();
+            async move {
+                let nix_check_string = format!(".#checks.{current_system}.{check_name}");
+                let info = crate::nix::build(
+                    nix_check_string.clone(),
+                    nix::BuildMode::DryRun,
+                    nix_options,
+                )
+                .await?;
+                info!("Running {:?} -> {}", nix_check_string, info[0].drv_path);
+                let start = Instant::now();
+                let build_status =
+                    crate::nix::build(nix_check_string, nix::BuildMode::Real, nix_options)
+                        .await
+                        .is_ok();
+                let duration = start.elapsed();
 
-    for (check_name, derivation) in relevant_checks {
-        let nix_check_string = format!(".#checks.{current_system}.{check_name}");
-        let info = crate::nix::build(
-            nix_check_string.clone(),
-            nix::BuildMode::DryRun,
-            nix_options,
-        )
-        .await?;
-        info!("Running {:?} -> {}", nix_check_string, info[0].drv_path);
-        let start = Instant::now();
-        let build_status = crate::nix::build(nix_check_string, nix::BuildMode::Real, nix_options)
-            .await
-            .is_ok();
-        let duration = start.elapsed();
-
-        check_infos.push(CheckTestCase {
-            name: derivation.name,
-            result: {
-                if build_status {
-                    info!("{check_name} ran succesfully");
-                    CheckResult::Success
-                } else {
-                    error!("{check_name} failed");
-                    CheckResult::Failure {
-                        log_output: {
-                            match crate::nix::log(&info[0].drv_path).await {
-                                Ok(out) => out,
-                                Err(error) => {
-                                    tracing::warn!(?error, "nix-log failed");
-                                    format!("nix-log call failed: {error}")
-                                }
+                Ok::<_, anyhow::Error>(CheckTestCase {
+                    name: derivation.name,
+                    result: {
+                        if build_status {
+                            info!("{check_name} ran succesfully");
+                            CheckResult::Success
+                        } else {
+                            error!("{check_name} failed");
+                            CheckResult::Failure {
+                                log_output: {
+                                    match crate::nix::log(&info[0].drv_path).await {
+                                        Ok(out) => out,
+                                        Err(error) => {
+                                            tracing::warn!(?error, "nix-log failed");
+                                            format!("nix-log call failed: {error}")
+                                        }
+                                    }
+                                },
                             }
-                        },
-                    }
-                }
-            },
-            duration,
+                        }
+                    },
+                    duration,
+                })
+            }
         })
-    }
+        .collect::<FuturesUnordered<_>>()
+        .try_collect::<Vec<CheckTestCase>>()
+        .await?;
 
     let test_cases: Vec<TestCase> = check_infos
         .into_iter()
