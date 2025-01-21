@@ -185,6 +185,8 @@ async fn run_checks(output_path: &Utf8Path, nix_options: &Vec<String>) -> anyhow
         .try_collect::<Vec<CheckTestCase>>()
         .await?;
 
+    let mut any_failed = false;
+
     let test_cases: Vec<TestCase> = check_infos
         .into_iter()
         .map(|c| match c.result {
@@ -198,6 +200,7 @@ async fn run_checks(output_path: &Utf8Path, nix_options: &Vec<String>) -> anyhow
             }
             CheckResult::Failure { log_output } => {
                 debug!(name = %c.name, "Creating failure case");
+                any_failed = true;
                 let mut tc = TestCaseBuilder::failure(
                     &c.name,
                     junit_report::Duration::milliseconds(c.duration.as_millis() as i64),
@@ -225,5 +228,9 @@ async fn run_checks(output_path: &Utf8Path, nix_options: &Vec<String>) -> anyhow
         .await
         .with_context(|| format!("Could not open path at '{}'", output_path))?;
 
-    Ok(())
+    if any_failed {
+        Err(anyhow::anyhow!("Some checks failed"))
+    } else {
+        Ok(())
+    }
 }
