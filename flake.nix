@@ -47,6 +47,7 @@
         nix_checks_junit = craneLib.buildPackage {
           inherit cargoArtifacts src version;
           cargoExtraArgs = "--all-features --all";
+          meta.mainProgram = "nix_checks_junit";
         };
 
       in
