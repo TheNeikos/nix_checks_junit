@@ -47,6 +47,13 @@
         nix_checks_junit = craneLib.buildPackage {
           inherit cargoArtifacts src version;
           cargoExtraArgs = "--all-features --all";
+
+          meta = {
+            mainProgram = "nix_checks_junit";
+            description = "A 'nix flake check' wrapper, that outputs junit compatible XML reports.";
+            homepage = "https://github.com/TheNeikos/nix_checks_junit";
+            license = pkgs.lib.licenses.agpl3Plus;
+          };
         };
 
       in
