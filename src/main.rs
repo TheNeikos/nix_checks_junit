@@ -50,8 +50,6 @@ async fn main() -> anyhow::Result<()> {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_timer(tracing_subscriber::fmt::time::uptime())
         .with_level(true)
-        .with_file(true)
-        .with_line_number(true)
         .pretty();
 
     tracing_subscriber::registry()
