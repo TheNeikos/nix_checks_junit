@@ -2,14 +2,10 @@
   description = "The nix_checks_junit binary";
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-26.05";
-    crane = {
-      url = "github:ipetkov/crane";
-    };
+    crane.url = "github:ipetkov/crane";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-      };
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
