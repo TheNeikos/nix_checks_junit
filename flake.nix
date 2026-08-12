@@ -1,7 +1,7 @@
 {
   description = "The nix_checks_junit binary";
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-24.11";
+    nixpkgs.url = "nixpkgs/nixos-26.05";
     flake-utils = {
       url = "github:numtide/flake-utils";
     };
