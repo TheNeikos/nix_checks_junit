@@ -2,9 +2,6 @@
   description = "The nix_checks_junit binary";
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-26.05";
-    flake-utils = {
-      url = "github:numtide/flake-utils";
-    };
     crane = {
       url = "github:ipetkov/crane";
     };
@@ -17,35 +14,51 @@
   };
 
   outputs =
-    {
+    inputs@{
       nixpkgs,
       crane,
-      flake-utils,
       rust-overlay,
       ...
     }:
-    flake-utils.lib.eachDefaultSystem (
-      system:
-      let
-        pkgs = import nixpkgs {
+    let
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+
+      eachSupportedSystem = inputs.nixpkgs.lib.genAttrs supportedSystems;
+
+      pkgsFor =
+        system:
+        import inputs.nixpkgs {
           inherit system;
-          overlays = [ (import rust-overlay) ];
+          overlays = [ (import inputs.rust-overlay) ];
         };
 
-        rustTarget = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        craneLib = (crane.mkLib pkgs).overrideToolchain rustTarget;
+      rustTargetFor = system: (pkgsFor system).rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+      craneLibFor = system: (crane.mkLib (pkgsFor system)).overrideToolchain (rustTargetFor system);
 
-        tomlInfo = craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; };
-        inherit (tomlInfo) version;
-        src = ./.;
+      tomlInfoFor = system: (craneLibFor system).crateNameFromCargoToml { cargoToml = ./Cargo.toml; };
 
-        cargoArtifacts = craneLib.buildDepsOnly {
-          inherit src;
+      cargoArtifactsFor =
+        system:
+        (craneLibFor system).buildDepsOnly {
+          src = ./.;
           cargoExtraArgs = "--all-features --all";
         };
 
-        nix_checks_junit = craneLib.buildPackage {
-          inherit cargoArtifacts src version;
+      nix_checks_junitFor =
+        system:
+        let
+          cargoArtifacts = cargoArtifactsFor system;
+          crane = craneLibFor system;
+          tomlInfo = tomlInfoFor system;
+          pkgs = pkgsFor system;
+        in
+        crane.buildPackage {
+          inherit cargoArtifacts;
+          inherit (tomlInfo) version;
+          src = ./.;
           cargoExtraArgs = "--all-features --all";
 
           meta = {
@@ -56,33 +69,44 @@
           };
         };
 
-      in
-      rec {
-        checks = {
+    in
+    {
+      checks = eachSupportedSystem (
+        system:
+        let
+          cargoArtifacts = cargoArtifactsFor system;
+          craneLib = craneLibFor system;
+          nix_checks_junit = nix_checks_junitFor system;
+        in
+        {
           inherit nix_checks_junit;
 
           nix_checks_junit-clippy = craneLib.cargoClippy {
-            inherit cargoArtifacts src;
+            inherit cargoArtifacts;
+            src = ./.;
             cargoExtraArgs = "--all --all-features";
             cargoClippyExtraArgs = "-- --deny warnings";
           };
 
           nix_checks_junit-fmt = craneLib.cargoFmt {
-            inherit src;
+            src = ./.;
           };
-        };
+        }
+      );
 
-        packages.nix_checks_junit = nix_checks_junit;
-        packages.default = nix_checks_junit;
+      packages = eachSupportedSystem (system: {
+        nix_checks_junit = nix_checks_junitFor system;
+        default = nix_checks_junitFor system;
+      });
 
-        devShells.default = devShells.nix_checks_junit;
-        devShells.nix_checks_junit = pkgs.mkShell {
+      devShells = eachSupportedSystem (system: {
+        default = (pkgsFor system).mkShell {
           buildInputs = [ ];
 
           nativeBuildInputs = [
-            rustTarget
+            (rustTargetFor system)
           ];
         };
-      }
-    );
+      });
+    };
 }
